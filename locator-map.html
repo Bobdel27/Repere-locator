@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Locator Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  :root{
+    --ink:#0e1013;
+    --panel:#14181d;
+    --accent:#ff6a3d;
+    --line:#2a2f36;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    height:100%;
+    background:var(--ink);
+    overflow:hidden;
+    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  #map{
+    position:fixed;
+    inset:0;
+  }
+  #panel{
+    max-width:100vw;
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    background:var(--panel);
+    border-top:1px solid var(--line);
+    border-radius:0;
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+    padding-left:calc(16px + env(safe-area-inset-left));
+    padding-right:calc(16px + env(safe-area-inset-right));
+    display:flex;
+    gap:8px;
+    z-index:1000;
+    box-shadow:0 -4px 16px rgba(0,0,0,0.4);
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    flex-wrap:nowrap;
+    align-items:center;
+    justify-content:center;
+  }
+  #locInput{
+    background:#0e1013;
+    border:1px solid var(--line);
+    color:#fff;
+    padding:10px 12px;
+    border-radius:6px;
+    font-size:15px;
+    width:160px;
+    letter-spacing:0.5px;
+  }
+  #cityInput{
+    background:#0e1013;
+    border:1px solid #2a2f36;
+    color:#fff;
+    padding:10px 12px;
+    border-radius:6px;
+    font-size:15px;
+    width:160px;
+    letter-spacing:0.5px;
+  }
+  #cityInput:focus{
+    outline:none;
+    border-color:#ff6a3d;
+  }
+  #geoBtn{
+    border:none;
+    border-radius:6px;
+    padding:10px 14px;
+    font-size:15px;
+    cursor:pointer;
+    background:#2a2f36;
+    color:#fff;
+  }
+  #cityBtn{
+    border:none;
+    border-radius:6px;
+    padding:10px 14px;
+    font-size:15px;
+    cursor:pointer;
+    background:#2a2f36;
+    color:#fff;
+  }
+  #locInput:focus{
+    outline:none;
+    border-color:var(--accent);
+  }
+  #goBtn, #resetBtn{
+    border:none;
+    border-radius:6px;
+    padding:10px 16px;
+    font-size:15px;
+    cursor:pointer;
+  }
+  #goBtn{
+    background:var(--accent);
+    color:#0e1013;
+    font-weight:600;
+  }
+  #resetBtn{
+    background:transparent;
+    color:#9aa3ad;
+    border:1px solid var(--line);
+    display:none;
+  }
+  #label{
+    position:fixed;
+    bottom:calc(70px + env(safe-area-inset-bottom));
+    left:50%;
+    transform:translateX(-50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:#fff;
+    padding:8px 14px;
+    border-radius:8px;
+    font-size:14px;
+    letter-spacing:0.5px;
+    display:none;
+    z-index:1000;
+    white-space:nowrap;
+    max-width:calc(100vw - 40px);
+    overflow-x:auto;
+  }
+  @media (max-width: 480px){
+    #panel{
+      padding:8px 8px calc(8px + env(safe-area-inset-bottom));
+      gap:6px;
+    }
+    #cityInput, #locInput{
+      width:100px;
+      font-size:13px;
+      padding:8px 10px;
+    }
+    #goBtn, #resetBtn, #cityBtn, #geoBtn{
+      font-size:13px;
+      padding:8px 10px;
+    }
+    #label{
+      bottom:calc(65px + env(safe-area-inset-bottom));
+      font-size:12px;
+      padding:6px 10px;
+      max-width:calc(100vw - 20px);
+      text-align:center;
+      white-space:normal;
+      word-break:break-all;
+    }
+  }
+  @media (max-width: 380px){
+    #panel{
+      gap:4px;
+    }
+    #cityInput, #locInput{
+      width:78px;
+      font-size:12px;
+      padding:8px 6px;
+    }
+    #goBtn, #resetBtn, #cityBtn, #geoBtn, #shareBtn, #layerBtn, #distBtn, #clearCityBtn, #clearLocBtn{
+      font-size:12px;
+      padding:8px 8px;
+    }
+  }
+  @media (min-width: 700px) and (max-width: 1024px){
+    #panel{
+      padding:14px 24px calc(14px + env(safe-area-inset-bottom));
+      gap:10px;
+    }
+    #cityInput, #locInput{
+      width:180px;
+      font-size:16px;
+    }
+    #goBtn, #resetBtn, #cityBtn, #geoBtn, #shareBtn, #layerBtn, #distBtn{
+      font-size:16px;
+      padding:12px 16px;
+    }
+    #label{
+      font-size:15px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="panel">
+  <button id="geoBtn">📍</button>
+  <input id="cityInput" type="text" placeholder="Ville..." autocomplete="off">
+  <button id="cityBtn">🔍</button>
+  <button id="clearCityBtn" style="border:none;border-radius:6px;padding:10px 14px;font-size:15px;cursor:pointer;background:#2a2f36;color:#9aa3ad;">✕</button>
+  <div style="width:1px;background:#2a2f36;margin:0 4px;"></div>
+  <input id="locInput" type="text" placeholder="Ex: JN45vb" maxlength="6" autocomplete="off">
+  <button id="clearLocBtn" style="border:none;border-radius:6px;padding:10px 14px;font-size:15px;cursor:pointer;background:#2a2f36;color:#9aa3ad;">✕</button>
+  <button id="goBtn">Localiser</button>
+  <button id="shareBtn" title="Partager position" style="border:none;border-radius:6px;padding:10px 14px;font-size:15px;cursor:pointer;background:#2a2f36;color:#fff;">🔗</button>
+  <button id="layerBtn" title="Basculer carte/satellite" style="border:none;border-radius:6px;padding:10px 14px;font-size:15px;cursor:pointer;background:#2a2f36;color:#fff;">🛰️</button>
+  <button id="distBtn" title="Distance entre locators" style="border:none;border-radius:6px;padding:10px 14px;font-size:15px;cursor:pointer;background:#2a2f36;color:#fff;">📏</button>
+  <button id="gpsBtn" title="Coordonnées GPS" style="border:none;border-radius:6px;padding:10px 14px;font-size:15px;cursor:pointer;background:#2a2f36;color:#fff;">🌐</button>
+  <button id="fsBtn" title="Plein écran" style="border:none;border-radius:6px;padding:10px 14px;font-size:15px;cursor:pointer;background:#2a2f36;color:#fff;">⛶</button>
+  <button id="resetBtn">Réinitialiser</button>
+</div>
+
+<!-- Modal GPS -->
+<div id="gpsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:#14181d;border:1px solid #2a2f36;border-radius:12px;padding:24px;width:min(300px, 90vw);color:#fff;font-family:'Segoe UI',sans-serif;">
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;">Aller aux coordonnées</div>
+    <input id="gpsLat" type="text" placeholder="Latitude (ex: 48.8566)" inputmode="decimal" style="width:100%;background:#0e1013;border:1px solid #2a2f36;color:#fff;padding:10px;border-radius:6px;font-size:15px;margin-bottom:10px;">
+    <input id="gpsLon" type="text" placeholder="Longitude (ex: 2.3522)" inputmode="decimal" style="width:100%;background:#0e1013;border:1px solid #2a2f36;color:#fff;padding:10px;border-radius:6px;font-size:15px;margin-bottom:14px;">
+    <div id="gpsError" style="font-size:14px;color:#ff4d4d;min-height:20px;margin-bottom:6px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button id="gpsGoBtn" style="background:#ff6a3d;color:#0e1013;border:none;border-radius:6px;padding:10px 18px;font-size:15px;font-weight:600;cursor:pointer;">Localiser</button>
+      <button id="gpsCloseBtn" style="background:#2a2f36;color:#fff;border:none;border-radius:6px;padding:10px 18px;font-size:15px;cursor:pointer;">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal distance -->
+<div id="distModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:#14181d;border:1px solid #2a2f36;border-radius:12px;padding:24px;width:min(300px, 90vw);color:#fff;font-family:'Segoe UI',sans-serif;">
+    <div style="font-size:16px;font-weight:600;margin-bottom:16px;">Distance entre deux locators</div>
+    <input id="dist1" type="text" placeholder="Locator 1 (ex: JN03)" maxlength="6" style="width:100%;background:#0e1013;border:1px solid #2a2f36;color:#fff;padding:10px;border-radius:6px;font-size:15px;margin-bottom:10px;">
+    <input id="dist2" type="text" placeholder="Locator 2 (ex: IN88)" maxlength="6" style="width:100%;background:#0e1013;border:1px solid #2a2f36;color:#fff;padding:10px;border-radius:6px;font-size:15px;margin-bottom:14px;">
+    <div id="distResult" style="font-size:15px;color:#ff6a3d;min-height:22px;margin-bottom:14px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button id="distCalcBtn" style="background:#ff6a3d;color:#0e1013;border:none;border-radius:6px;padding:10px 18px;font-size:15px;font-weight:600;cursor:pointer;">Calculer</button>
+      <button id="distCloseBtn" style="background:#2a2f36;color:#fff;border:none;border-radius:6px;padding:10px 18px;font-size:15px;cursor:pointer;">Fermer</button>
+    </div>
+  </div>
+</div>
+<div id="label"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const map = L.map('map', { zoomControl: true }).setView([20, 0], 2);
+
+const osmTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+const satTile = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19,
+  attribution: '&copy; Esri'
+});
+let isSatellite = false;
+
+let rectLayer = null;
+
+const input = document.getElementById('locInput');
+const goBtn = document.getElementById('goBtn');
+const resetBtn = document.getElementById('resetBtn');
+const label = document.getElementById('label');
+
+function parseLocator(raw){
+  const loc = raw.trim();
+  const re = /^([A-Ra-r])([A-Ra-r])(\d)?(\d)?([A-Xa-x])?([A-Xa-x])?$/;
+  const m = loc.match(re);
+  if(!m) return null;
+  const upper = loc.toUpperCase();
+  let lon = (upper.charCodeAt(0)-65)*20 - 180;
+  let lat = (upper.charCodeAt(1)-65)*10 - 90;
+  let lonSize = 20, latSize = 10;
+  if(m[3] !== undefined && m[4] !== undefined){
+    lon += parseInt(m[3])*2;
+    lat += parseInt(m[4])*1;
+    lonSize = 2; latSize = 1;
+  }
+  if(m[5] !== undefined && m[6] !== undefined){
+    lon += (upper.charCodeAt(4)-65)*(2/24);
+    lat += (upper.charCodeAt(5)-65)*(1/24);
+    lonSize = 2/24; latSize = 1/24;
+  }
+  return {lon1:lon, lat1:lat, lon2:lon+lonSize, lat2:lat+latSize};
+}
+
+function locate(){
+  const raw = input.value;
+  const b = parseLocator(raw);
+  if(!b){
+    input.style.borderColor = '#ff4d4d';
+    setTimeout(()=>{ input.style.borderColor=''; }, 900);
+    return;
+  }
+
+  const bounds = L.latLngBounds(
+    [b.lat1, b.lon1],
+    [b.lat2, b.lon2]
+  );
+
+  if(rectLayer){ map.removeLayer(rectLayer); }
+  const rectColor = raw.trim().length <= 2 ? '#4fc3f7' : raw.trim().length <= 4 ? '#66bb6a' : '#ff6a3d';
+  rectLayer = L.rectangle(bounds, {
+    color: rectColor,
+    weight: 3,
+    fill: false
+  }).addTo(map);
+
+  const len = raw.trim().length;
+  if(len <= 2){
+    const center = bounds.getCenter();
+    map.flyTo(center, 4, { duration: 1.2 });
+  } else {
+    map.flyToBounds(bounds, { padding: [8, 8], duration: 1.2 });
+  }
+
+  label.textContent = raw.trim().toUpperCase();
+  label.style.display = 'block';
+  resetBtn.style.display = 'inline-block';
+
+  if(document.documentElement.requestFullscreen && !document.fullscreenElement){
+    document.documentElement.requestFullscreen().then(()=>{
+      setTimeout(()=> map.invalidateSize(), 300);
+    }).catch(()=>{});
+  }
+}
+
+function reset(){
+  if(document.fullscreenElement){
+    document.exitFullscreen().catch(()=>{});
+  }
+  if(rectLayer){ map.removeLayer(rectLayer); rectLayer = null; }
+  map.flyTo([20, 0], 2, { duration: 0.9 });
+  label.style.display = 'none';
+  resetBtn.style.display = 'none';
+}
+
+document.addEventListener('fullscreenchange', ()=>{
+  setTimeout(()=> map.invalidateSize(), 200);
+  document.getElementById('fsBtn').textContent = document.fullscreenElement ? '✕' : '⛶';
+});
+
+document.getElementById('fsBtn').addEventListener('click', ()=>{
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen().catch(()=>{});
+  } else {
+    document.exitFullscreen().catch(()=>{});
+  }
+});
+
+document.getElementById('gpsBtn').addEventListener('click', ()=>{
+  document.getElementById('gpsModal').style.display = 'flex';
+});
+document.getElementById('gpsCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('gpsModal').style.display = 'none';
+  document.getElementById('gpsError').textContent = '';
+});
+let coordMarker = null;
+
+function goToCoords(lat, lon){
+  const locator = latLonToLocator(lat, lon);
+  lastLat = lat; lastLon = lon; lastLocator = locator;
+
+  map.flyTo([lat, lon], 14, { duration: 1.2, animate: true });
+
+  if(coordMarker){ map.removeLayer(coordMarker); }
+  coordMarker = L.circleMarker([lat, lon], {
+    radius: 4,
+    color: '#fff',
+    fillColor: '#4caf50',
+    fillOpacity: 1,
+    weight: 2
+  }).addTo(map);
+
+  setTimeout(()=>{
+    if(rectLayer){ map.removeLayer(rectLayer); }
+    const b = parseLocator(locator);
+    if(b){
+      const bounds = L.latLngBounds([b.lat1, b.lon1],[b.lat2, b.lon2]);
+      rectLayer = L.rectangle(bounds, { color: '#ff6a3d', weight: 3, fill: false }).addTo(map);
+    }
+    map.panTo([lat, lon], { animate: false });
+  }, 1300);
+
+  const lbl = document.getElementById('label');
+  lbl.innerHTML = '';
+  const span = document.createElement('span');
+  span.textContent = lat.toFixed(4) + '°, ' + lon.toFixed(4) + '°  —  ' + locator;
+  lbl.appendChild(span);
+  lbl.style.display = 'block';
+  resetBtn.style.display = 'inline-block';
+}
+
+document.getElementById('gpsGoBtn').addEventListener('click', ()=>{
+  const latVal = document.getElementById('gpsLat').value.trim().replace(',', '.');
+  const lonVal = document.getElementById('gpsLon').value.trim().replace(',', '.');
+  const coords = parseCoords(latVal + ',' + lonVal);
+  if(!coords){
+    document.getElementById('gpsError').textContent = 'Coordonnées invalides.';
+    return;
+  }
+  document.getElementById('gpsModal').style.display = 'none';
+  document.getElementById('gpsError').textContent = '';
+  goToCoords(coords.lat, coords.lon);
+});
+document.getElementById('gpsLat').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('gpsGoBtn').click(); });
+document.getElementById('gpsLon').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('gpsGoBtn').click(); });
+
+function latLonToLocator(lat, lon){
+  const A = Math.floor((lon + 180) / 20);
+  const B = Math.floor((lat + 90) / 10);
+  const C = Math.floor(((lon + 180) % 20) / 2);
+  const D = Math.floor((lat + 90) % 10);
+  const E = Math.floor(((lon + 180) % 2) / (2/24));
+  const F = Math.floor(((lat + 90) % 1) / (1/24));
+  return String.fromCharCode(65+A) + String.fromCharCode(65+B) +
+         C + D +
+         String.fromCharCode(97+E) + String.fromCharCode(97+F);
+}
+
+function parseCoords(raw){
+  const m = raw.trim().match(/^(-?\d{1,3}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if(!m) return null;
+  const lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+  if(lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return {lat, lon};
+}
+
+async function searchCity(){
+  const city = document.getElementById('cityInput').value.trim();
+  if(!city) return;
+
+  const url = 'https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(city)+'&format=json&limit=1';
+  const res = await fetch(url);
+  const data = await res.json();
+  if(!data.length){
+    document.getElementById('cityInput').style.borderColor='#ff4d4d';
+    setTimeout(()=>{ document.getElementById('cityInput').style.borderColor=''; },900);
+    return;
+  }
+  const lat = parseFloat(data[0].lat);
+  const lon = parseFloat(data[0].lon);
+  const displayName = data[0].display_name.split(',')[0];
+
+  const locators = new Set();
+  const maxKm = 10;
+  const dLat = maxKm / 111;
+  const dLon = maxKm / (111 * Math.cos(lat * Math.PI / 180));
+  const bb = data[0].boundingbox;
+  const minLat = Math.max(parseFloat(bb[0]), lat - dLat);
+  const maxLat = Math.min(parseFloat(bb[1]), lat + dLat);
+  const minLon = Math.max(parseFloat(bb[2]), lon - dLon);
+  const maxLon = Math.min(parseFloat(bb[3]), lon + dLon);
+  const step = 1/24;
+  for(let la = minLat; la <= maxLat; la += step){
+    for(let lo = minLon; lo <= maxLon; lo += step){
+      locators.add(latLonToLocator(la, lo));
+    }
+  }
+  locators.add(latLonToLocator(lat, lon));
+  const centralLoc = latLonToLocator(lat, lon);
+  const locList = [centralLoc, ...[...locators].filter(l => l !== centralLoc).sort()];
+
+  const lbl = document.getElementById('label');
+  lbl.style.display = 'block';
+  lbl.innerHTML = '';
+
+  // Nom de la ville
+  const cityName = document.createElement('span');
+  cityName.textContent = displayName + '  —  ' + lat.toFixed(4) + '°, ' + lon.toFixed(4) + '°  —  ';
+  lbl.appendChild(cityName);
+
+  // Chaque locator cliquable
+  locList.forEach((loc, i) => {
+    const btn = document.createElement('span');
+    btn.textContent = loc;
+    btn.style.cssText = 'cursor:pointer;padding:2px 6px;border-radius:4px;background:#2a2f36;margin:0 2px;display:inline-block;';
+    btn.addEventListener('mouseenter', ()=> btn.style.background='#ff6a3d');
+    btn.addEventListener('mouseleave', ()=> btn.style.background='#2a2f36');
+    btn.addEventListener('click', ()=>{
+      if(rectLayer){ map.removeLayer(rectLayer); }
+      const b = parseLocator(loc);
+      if(b){
+        const bounds = L.latLngBounds([b.lat1, b.lon1],[b.lat2, b.lon2]);
+        const col = loc.length <= 2 ? '#4fc3f7' : loc.length <= 4 ? '#66bb6a' : '#ff6a3d';
+        rectLayer = L.rectangle(bounds, { color: col, weight: 3, fill: false }).addTo(map);
+        if(loc.length <= 2){
+          map.flyTo(bounds.getCenter(), 4, { duration: 1.2 });
+        } else {
+          map.flyToBounds(bounds, { padding: [8, 8], duration: 1.2 });
+        }
+        cityName.textContent = displayName + '  —  ' + bounds.getCenter().lat.toFixed(4) + '°, ' + bounds.getCenter().lng.toFixed(4) + '°  —  ';
+      }
+    });
+    lbl.appendChild(btn);
+  });
+
+  // Zoom centré sur la ville d'abord
+  map.flyTo([lat, lon], 14, { duration: 1.2 });
+
+  // Rectangle du locator central après le zoom
+  setTimeout(()=>{
+    if(rectLayer){ map.removeLayer(rectLayer); }
+    const centralLoc = latLonToLocator(lat, lon);
+    const b = parseLocator(centralLoc);
+    if(b){
+      const rectBounds = L.latLngBounds([b.lat1, b.lon1],[b.lat2, b.lon2]);
+      rectLayer = L.rectangle(rectBounds, { color: '#ff6a3d', weight: 3, fill: false }).addTo(map);
+    }
+    // Recentrer exactement après le rectangle
+    map.panTo([lat, lon], { animate: false });
+  }, 1300);
+  resetBtn.style.display = 'inline-block';
+}
+
+map.on('click', function(e){
+  const lat = e.latlng.lat;
+  const lon = e.latlng.lng;
+  const locator = latLonToLocator(lat, lon);
+  lastLat = lat; lastLon = lon; lastLocator = locator;
+
+  if(rectLayer){ map.removeLayer(rectLayer); }
+  const b = parseLocator(locator);
+  if(b){
+    const bounds = L.latLngBounds([b.lat1, b.lon1],[b.lat2, b.lon2]);
+    rectLayer = L.rectangle(bounds, { color: '#ff6a3d', weight: 3, fill: false }).addTo(map);
+  }
+
+  const lbl = document.getElementById('label');
+  lbl.innerHTML = '';
+  const span = document.createElement('span');
+  span.textContent = lat.toFixed(4) + '°, ' + lon.toFixed(4) + '°  —  ' + locator;
+  lbl.appendChild(span);
+  lbl.style.display = 'block';
+  resetBtn.style.display = 'inline-block';
+});
+
+let geoMarker = null;
+
+document.getElementById('geoBtn').addEventListener('click', ()=>{
+  if(!navigator.geolocation){
+    alert('Géolocalisation non supportée par ce navigateur.');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+    const locator = latLonToLocator(lat, lon);
+
+    map.flyTo([lat, lon], 14, { duration: 1.2, animate: true });
+
+    if(geoMarker){ map.removeLayer(geoMarker); }
+    geoMarker = L.circleMarker([lat, lon], {
+      radius: 4,
+      color: '#fff',
+      fillColor: '#e53935',
+      fillOpacity: 1,
+      weight: 2
+    }).addTo(map);
+
+    setTimeout(()=>{
+      if(rectLayer){ map.removeLayer(rectLayer); }
+      const b = parseLocator(locator);
+      if(b){
+        const bounds = L.latLngBounds([b.lat1, b.lon1],[b.lat2, b.lon2]);
+        rectLayer = L.rectangle(bounds, { color: '#ff6a3d', weight: 3, fill: false }).addTo(map);
+      }
+      // Recentrer exactement après le rectangle
+      map.panTo([lat, lon], { animate: false });
+    }, 1300);
+
+    const lbl = document.getElementById('label');
+    lbl.innerHTML = '';
+    const span = document.createElement('span');
+    span.textContent = '📍 ' + lat.toFixed(4) + '°, ' + lon.toFixed(4) + '°  —  ' + locator;
+    lbl.appendChild(span);
+    lbl.style.display = 'block';
+    resetBtn.style.display = 'inline-block';
+  }, ()=>{
+    alert('Impossible d\'obtenir votre position.');
+  });
+});
+
+document.getElementById('clearCityBtn').addEventListener('click', ()=>{ document.getElementById('cityInput').value=''; });
+document.getElementById('clearLocBtn').addEventListener('click', ()=>{ document.getElementById('locInput').value=''; });
+goBtn.addEventListener('click', locate);
+resetBtn.addEventListener('click', reset);
+input.addEventListener('keydown', e=>{ if(e.key === 'Enter') locate(); });
+input.addEventListener('input', ()=>{
+  const len = input.value.trim().length;
+  if(len === 2 || len === 4 || len === 6) locate();
+});
+document.getElementById('cityBtn').addEventListener('click', searchCity);
+document.getElementById('cityInput').addEventListener('keydown', e=>{ if(e.key==='Enter') searchCity(); });
+
+// --- Partage ---
+let lastLat = null, lastLon = null, lastLocator = null;
+document.getElementById('shareBtn').addEventListener('click', ()=>{
+  let lat = lastLat, lon = lastLon, locator = lastLocator;
+  if(lat === null){
+    const c = map.getCenter();
+    lat = c.lat; lon = c.lng;
+    locator = latLonToLocator(lat, lon);
+  }
+  const gmaps = 'https://maps.google.com/?q=' + lat.toFixed(6) + ',' + lon.toFixed(6);
+  navigator.clipboard.writeText(gmaps).then(()=>{
+    const btn = document.getElementById('shareBtn');
+    btn.textContent = '✓';
+    setTimeout(()=>{ btn.textContent='🔗'; }, 1500);
+  });
+});
+// Charger depuis URL
+(()=>{
+  const p = new URLSearchParams(location.search);
+  if(p.has('lat') && p.has('lon')){
+    const lat = parseFloat(p.get('lat'));
+    const lon = parseFloat(p.get('lon'));
+    lastLat = lat; lastLon = lon;
+    const locator = latLonToLocator(lat, lon);
+    map.flyTo([lat, lon], 14, { duration: 1.2 });
+    setTimeout(()=>{
+      const b = parseLocator(locator);
+      if(b){
+        const bounds = L.latLngBounds([b.lat1, b.lon1],[b.lat2, b.lon2]);
+        rectLayer = L.rectangle(bounds, { color:'#ff6a3d', weight:3, fill:false }).addTo(map);
+      }
+      map.panTo([lat, lon], { animate:false });
+    }, 1300);
+    const lbl = document.getElementById('label');
+    lbl.innerHTML = '';
+    const span = document.createElement('span');
+    span.textContent = lat.toFixed(4) + '°, ' + lon.toFixed(4) + '°  —  ' + locator;
+    lbl.appendChild(span);
+    lbl.style.display = 'block';
+    resetBtn.style.display = 'inline-block';
+  }
+})();
+
+// --- Distance ---
+function locatorCenter(raw){
+  const b = parseLocator(raw);
+  if(!b) return null;
+  return { lat:(b.lat1+b.lat2)/2, lon:(b.lon1+b.lon2)/2 };
+}
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+document.getElementById('distBtn').addEventListener('click', ()=>{
+  const m = document.getElementById('distModal');
+  m.style.display = 'flex';
+});
+document.getElementById('distCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('distModal').style.display = 'none';
+  document.getElementById('distResult').textContent = '';
+});
+document.getElementById('distCalcBtn').addEventListener('click', ()=>{
+  const v1 = document.getElementById('dist1').value.trim();
+  const v2 = document.getElementById('dist2').value.trim();
+  const c1 = locatorCenter(v1);
+  const c2 = locatorCenter(v2);
+  const res = document.getElementById('distResult');
+  if(!c1||!c2){ res.textContent = 'Locator invalide.'; return; }
+  const km = haversine(c1.lat,c1.lon,c2.lat,c2.lon);
+  res.textContent = km < 1 ? (km*1000).toFixed(0)+' m' : km.toFixed(1)+' km';
+});
+
+// --- Switch layer ---
+document.getElementById('layerBtn').addEventListener('click', ()=>{
+  if(!isSatellite){
+    map.removeLayer(osmTile);
+    satTile.addTo(map);
+    document.getElementById('layerBtn').textContent = '🗺️';
+    isSatellite = true;
+  } else {
+    map.removeLayer(satTile);
+    osmTile.addTo(map);
+    document.getElementById('layerBtn').textContent = '🛰️';
+    isSatellite = false;
+  }
+});
+</script>
+
+</body>
+</html>
